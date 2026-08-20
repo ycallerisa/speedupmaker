@@ -1,140 +1,120 @@
-# SpeedupMaker – Spotify Lyrics Video Generator
+# SpeedupMaker
 
-SpeedupMaker is a Python tool that turns a Spotify track URL into a short TikTok-style vertical video with:
-- Sped-up audio
-- Word-level synchronized lyrics
-- Dynamic per-word highlighting over a background video
+SpeedupMaker is an experimental Python media pipeline that converts a Spotify track URL into a short vertical video with sped-up audio and word-level synchronized lyrics.
 
-The project automates an end-to-end media pipeline: audio download, lyrics retrieval, alignment, timing transformation, and final 1080×1920 rendering.
+The project was created to automate a multi-stage workflow involving media acquisition, lyrics retrieval, forced alignment, timestamp transformation and video rendering. It is currently an **environment-specific prototype**, not a turnkey Python package.
 
-------------------------------------------------------------
+## Pipeline
 
-## Features
+```text
+Spotify track URL
+      |
+      +--> spotDL ----------------------> song.mp3
+      |
+      +--> Genius ----------------------> cleaned lyrics
+                                              |
+                                              v
+                              NUS AutoLyrixAlign / Kaldi
+                                              |
+                                              v
+                                  word-level timestamps
+                                              |
+                   +--------------------------+
+                   |
+                   +--> audio speed transform
+                   +--> timestamp transform
+                   +--> background composition
+                                              |
+                                              v
+                                    final_output.mp4
+```
 
-- Download a track from a Spotify URL using spotdl
-- Fetch and clean lyrics from Genius via the lyricsgenius API
-- Run forced alignment in a Singularity/Kaldi container
-- Convert alignment output into word-level JSON timestamps
-- Rebuild sentences from word-level alignments
-- Speed up audio and adjust all lyrics timestamps
-- Render a 1080×1920 vertical TikTok-style lyrics video with highlighted words
+## Implemented capabilities
 
-------------------------------------------------------------
+- validation of Spotify track URLs;
+- track download through `spotdl`;
+- lyrics retrieval through the Genius API;
+- normalization and cleanup of lyrics;
+- forced alignment through NUS AutoLyrixAlign running in a Singularity/Kaldi image;
+- conversion of alignment output to word-level JSON timestamps;
+- reconstruction of sentence-level lyric groups;
+- synchronized transformation of audio speed and lyric timestamps;
+- background-video concatenation and cropping;
+- rendering of a 1080x1920 vertical video with per-word highlighting.
 
-## Architecture Overview
+## Repository layout
 
-The pipeline:
+| File | Responsibility |
+| --- | --- |
+| `full_script.py` | Pipeline orchestration, alignment parsing, audio processing and rendering |
+| `lyrics_fetcher.py` | Genius API access and lyrics preprocessing |
 
-1. Input
-   - Spotify track URL
-   - Background videos stored in: video_background/
-
-2. Audio & Lyrics
-   - Download audio via spotdl (song.mp3)
-   - Fetch lyrics from Genius and save to: lyrics/scrapedlyrics.txt
-
-3. Alignment
-   - Run alignment inside a Singularity/Kaldi container (RunAlignment.sh)
-   - Convert output to: lyrics.json
-   - Build: sentence_based_lyrics.json
-
-4. Speedup
-   - Speed up audio by a configurable factor
-   - Update timestamps in the lyrics JSON
-   - Trim the audio to the selected duration
-
-5. Rendering
-   - Preprocess background videos (scale, fade, concatenate)
-   - Render a 1080×1920 TikTok-style layout
-   - Export the final output as: final_output.mp4
-
-------------------------------------------------------------
+Generated files include `song.mp3`, `song_cut.mp3`, `lyrics.json`, `sentence_based_lyrics.json`, `lyrics_speed_up.json`, `song_speed_up.wav`, `out.mp4` and `final_output.mp4`.
 
 ## Requirements
 
-### System Dependencies
+The current prototype expects:
 
-- Python 3.10 or newer
-- ffmpeg installed on PATH
-- spotdl installed globally
-- Singularity (or Apptainer)
-- Kaldi alignment image (kaldi.simg)
+- Python 3.10 or later;
+- FFmpeg available on `PATH`;
+- `spotdl`;
+- Singularity or a compatible Apptainer setup;
+- a local `NUSAutoLyrixAlign` directory and its `kaldi.simg` image;
+- a `Montserrat-Bold.ttf` font file;
+- one or more background videos in `video_background/`;
+- a Genius API access token.
 
-### Python Packages
+Python packages used by the scripts include:
 
-Install dependencies using:
-
-pip install pydub moviepy pillow numpy ffmpeg-python lyricsgenius
-
-You will also need transitive dependencies from spotdl and lyricsgenius.
-
-------------------------------------------------------------
-
-## Configuration
-
-### Genius API Token
-
-Set your Genius token using:
-
-export GENIUS_ACCESS_TOKEN="your_token_here"
-
-### Background Videos
-
-Place .mp4 background clips in:
-
-./video_background/
-
-These will be scaled, faded, concatenated, and adapted to 1080×1920.
-
-### Fonts
-
-Update the FONT_PATH constant in the code to point to your chosen .ttf font.
-
-------------------------------------------------------------
-
-## Usage
-
-### Run the Full Pipeline
-
-python full_script.py
-
-You will be prompted for:
-- A Spotify URL
-- A start time in seconds
-
-### Process Background Videos Only
-
-python full_script.py --process_videos
-
-### Generate Only the Final Lyrics Video
-
-If intermediate files already exist (lyrics_speed_up.json, out.mp4, song_speed_up.wav):
-
-python full_script.py --create_lyrics_video
-
-### Cleanup Temporary Files
-
-python full_script.py --delete
-
-------------------------------------------------------------
-
-## Project Structure
-
-```.
-├── full_script.py
-├── lyrics_fetcher.py
-├── video_background/
-├── lyrics/
-└── final_output.mp4
+```bash
+python -m pip install spotdl lyricsgenius pydub numpy ffmpeg-python Pillow moviepy
 ```
 
-------------------------------------------------------------
+Set the Genius token in the environment:
 
-## Limitations & Future Improvements
+```bash
+export GENIUS_ACCESS_TOKEN="your-token"
+```
 
-- External dependencies (spotdl, ffmpeg, Singularity, Kaldi) must be installed manually
-- Some configuration values (paths, fonts, speed factor) are hard-coded
-- No automated tests at this stage
-- Not yet packaged as a pip-installable CLI tool
+Never commit the token or include it in logs.
 
-------------------------------------------------------------
+## Running the prototype
+
+Run the interactive end-to-end flow with:
+
+```bash
+python full_script.py
+```
+
+The script asks for a Spotify track URL and the starting offset of the extract.
+
+Additional modes currently available:
+
+```bash
+python full_script.py --process_videos
+python full_script.py --create_lyrics_video
+python full_script.py --delete
+```
+
+## Current portability limitations
+
+The checked-in version reflects the original development environment:
+
+- several generated-file paths still reference `/home/kathiou/sp3`;
+- the alignment command assumes a specific `NUSAutoLyrixAlign` directory layout;
+- the alignment process is launched through a shell command;
+- dependency versions are not pinned;
+- intermediate filenames are fixed and concurrent runs are not supported;
+- cleanup operates on generated files in the current working directory;
+- no automated test suite is currently included.
+
+These constraints must be removed before the project can be considered reproducible outside its original environment.
+
+## Engineering focus
+
+The project demonstrates orchestration of heterogeneous tools, subprocess management, external API integration, time-series transformation and media rendering. A production-oriented refactor would separate the pipeline into isolated stages, introduce a workspace per job, validate all subprocess inputs and add deterministic tests around timestamp transformations.
+
+## Responsible use
+
+Only process media and lyrics that you are authorized to download, transform and publish. Third-party services remain subject to their own terms of use and copyright restrictions.
+
